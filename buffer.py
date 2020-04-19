@@ -18,6 +18,7 @@ from azure.iot.device import exceptions as iotex
 #Globals
 mqttclient   = mqtt.Client()
 databuffer_db = None
+data_db = None
 iotclient = None
 
 RESPONSE_MSGIDS = [];
@@ -53,7 +54,10 @@ async def sendBufferToHub():
 
         c.execute("SELECT ROWID, * FROM buffer WHERE state = 'new' ORDER BY ROWID ASC LIMIT 1")
         row = c.fetchone()
-
+        
+        data_db = lite..connect('data.db');
+        datac = data_db.cursor();
+        
         if(row != None):
             #there is data in the buffer!
             #try to send the row forward to IoT hub:
@@ -67,6 +71,16 @@ async def sendBufferToHub():
             try:
                 message =  Message(msg_txt_formatted, message_id="%s" % row[0])
                 await asyncio.wait_for(iotclient.send_message(message), 2.0)
+                
+                #Format: "temperature": "%f","humidity\": "%f","edgetimestamp":"%s"
+                split = [re.sub('[^0-9.]','',x) for x in row[2].split(',')]
+                temp=split[0]
+                hum=split[1]
+                timestamp=split[2]
+                q = "INSTERT INTO rasp VALUES (%s, %s, ) " % (row[1], temp, hum, timestamp)
+                print(q)
+                datac.execute(q);
+                
                 #Send correctly! delete the row
                 #update state:
                 q = "DELETE FROM buffer WHERE ROWID = %s" % (row[0])
@@ -76,6 +90,8 @@ async def sendBufferToHub():
                 #An Error accoured!
                 print("An error acoured while trying to send iot message:")
                 print(e);
+                data_db.commit();
+                data_db.close();
                 
                 #halt all tries to send current buffer
                 return
@@ -97,7 +113,7 @@ def close():
     print("Exiting...")
     
 async def mainloop():
-    global databuffer_db, RESPONSE_MSGIDS, RESPONSE_RESULT
+    global databuffer_db
     
     
     #infinite loop:
@@ -105,28 +121,7 @@ async def mainloop():
         await sendBufferToHub()
         
         mqttclient.loop(0.1);
-    
-        #check if messeges are receifed 
-        c = databuffer_db.cursor()
-        n =1;
-        while n < len(RESPONSE_MSGIDS):
-            idd = RESPONSE_MSGIDS[n]
-            res = RESPONSE_RESULT[n]
-            n += 1;
-            
-            print(res)
-            if 'OK' in ("%s"%res):
-                q = "DELETE FROM buffer WHERE ROWID = %s" % (idd)
-                print(q)
-                c.execute(q)
-            else :
-                q ="UPDATE buffer SET state = \'new\' WHERE ROWID = %s;" % (idd)
-                print(q)
-                c.execute(q)
-                
-        RESPONSE_MSGIDS = ['']
-        RESPONSE_RESULT = [''] 
-        
+  
         databuffer_db.commit();
     return
 
@@ -148,6 +143,19 @@ if __name__ == "__main__":
                                     ); """
        c = databuffer_db.cursor();
        c.execute(sql_create_buffer_table) 
+       
+       data_db = lite.connect('data.db');
+       sql_create_buffer_table = """ CREATE TABLE IF NOT EXISTS rasp (
+                                        deviceid varchar(64),
+                                        temperature text,
+                                        humidity text,
+                                        timestamp text
+                                    ); """
+       datac = data_db.cursor();
+       datac.execute(sql_create_buffer_table)
+       data_db.commit()
+       data_db.close()
+       
        print("Connected to buffer database.")
     except lite.Error as e:
        print("Error initializing buffer database: %s" % e)
