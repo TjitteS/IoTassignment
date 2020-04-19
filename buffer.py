@@ -78,7 +78,7 @@ async def sendBufferToHub():
                 temp=split[0]
                 hum=split[1]
                 timestamp=split[2]
-                q = "INSTERT INTO rasp VALUES (%s, %s, %s, %s);" % (row[1], temp, hum, timestamp)
+                q = "INSERT INTO rasp VALUES (%s, %s, %s, %s);" % (row[1], temp, hum, timestamp)
                 print(q)
                 datac.execute(q);
                 
