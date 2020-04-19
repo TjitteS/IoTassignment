@@ -13,6 +13,7 @@ from azure.iot.device.aio import IoTHubDeviceClient
 from azure.iot.device import Message
 import asyncio
 from azure.iot.device import exceptions as iotex
+import re
 
 
 #Globals
