@@ -55,7 +55,7 @@ async def sendBufferToHub():
         c.execute("SELECT ROWID, * FROM buffer WHERE state = 'new' ORDER BY ROWID ASC LIMIT 1")
         row = c.fetchone()
         
-        data_db = lite..connect('data.db');
+        data_db = lite.connect('data.db');
         datac = data_db.cursor();
         
         if(row != None):
