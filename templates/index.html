@@ -1,17 +1,34 @@
 <!DOCTYPE html>
    <head>
-      <title>DHT Sensor data </title>
+      <title>IoT assignment - home </title>
       <link rel="stylesheet" href='../static/style.css'/>
    </head>
 
    <body>
-		<h1>DHT Sensor Data </h1>
-		<h3> TEMPERATURE &nbsp; ==>  {{ tempLab  }} oC</h3>
-		<h3> HUMIDITY (Rel.) ==>  {{ humLab  }} %</h3>
-		<hr>
-		<h3> Last Sensors Reading: {{ time }} ==> <a href="/"class="button">REFRESH</a></h3>
-		<hr>
-		<p> @2018 Developed by MJRoBot.org</p>
+   
+		<h1>Latest sensor data: </h1>
+		<table style="width:20%">
+			<tr>
+				<th>Temperature:</th>
+				<th>{{ temp  }}</th>
+				<th>&degC </th>
+				
+			</tr>
+			<tr>
+				<th>Humidity:</th>
+				<th>{{ hum  }}</th>
+				<th>%</th>
+			</tr>
+			<tr>
+				<th>Time:</th>
+				<th>{{ time }}</th>
+			</tr>
+		</table>
 
+		<a href="/graph"class="button">Live Graph!</a></h3>
+	
+		<p> 
+			@2020 Tjitte van der PLoeg 
+		</p>
    </body>
 </html>

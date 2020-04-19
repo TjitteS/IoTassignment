@@ -43,7 +43,7 @@ def on_message(client, userdata, msg):
        print("Error while inserting message in buffer: %s" % e)
 
 async def sendBufferToHub():
-    global databuffer_db, MESSAGE_COUNT, iotclient
+    global databuffer_db,data_db, MESSAGE_COUNT, iotclient
     c = databuffer_db.cursor()
             
     #Sends all data from the buffer to the iot hub.
@@ -56,7 +56,7 @@ async def sendBufferToHub():
         c.execute("SELECT ROWID, * FROM buffer WHERE state = 'new' ORDER BY ROWID ASC LIMIT 1")
         row = c.fetchone()
         
-        data_db = lite.connect('data.db');
+        #data_db = lite.connect('data.db');
         datac = data_db.cursor();
         
         if(row != None):
@@ -73,12 +73,15 @@ async def sendBufferToHub():
                 message =  Message(msg_txt_formatted, message_id="%s" % row[0])
                 await asyncio.wait_for(iotclient.send_message(message), 2.0)
                 
+                
                 #Format: "temperature": "%f","humidity\": "%f","edgetimestamp":"%s"
-                split = [re.sub('[^0-9.]','',x) for x in row[2].split(',')]
-                temp=split[0]
-                hum=split[1]
-                timestamp=split[2]
-                q = "INSERT INTO rasp VALUES (%s, %s, %s, %s);" % (row[1], temp, hum, timestamp)
+                split = row[2].split(',')
+                temp=re.sub('[^0-9.]','',split[0])
+                hum=re.sub('[^0-9.]','',split[1])
+                split = row[2].split('\"edgetimestamp\":');
+                print(split)
+                timestamp=re.sub('"','',split[1])
+                q = "INSERT INTO [rasp] VALUES (\'%s\', \'%s\', \'%s\', \'%s\');" % (row[1], temp, hum, timestamp)
                 print(q)
                 datac.execute(q);
                 
@@ -92,13 +95,15 @@ async def sendBufferToHub():
                 print("An error acoured while trying to send iot message:")
                 print(e);
                 data_db.commit();
-                data_db.close();
+                #data_db.close();
                 
                 #halt all tries to send current buffer
                 return
             
         else:
             #there is no more data in the buffer.
+            data_db.commit();
+            #data_db.close();
             return
         
     return
@@ -155,7 +160,7 @@ if __name__ == "__main__":
        datac = data_db.cursor();
        datac.execute(sql_create_buffer_table)
        data_db.commit()
-       data_db.close()
+       #data_db.close()
        
        print("Connected to buffer database.")
     except lite.Error as e:

@@ -31,7 +31,7 @@ while True:
     data = bme280.sample(bus, address, calibration_params)
 
     # there is a handy string representation too
-    timestamp = datetime.datetime.now().strftime("%B %d, %Y, %H.%M.%S")
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d, %H.%M.%S.%f")
     payload = "\"temperature\": \"%f\",\"humidity\": \"%f\",\"edgetimestamp\":\"%s\"" % (data.temperature, data.humidity, timestamp)
     print(payload)
     publish.single("devices/local", payload, hostname="localhost")
