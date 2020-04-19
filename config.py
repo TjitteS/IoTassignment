@@ -1,2 +1,0 @@
-BROKER_IP = "localhost"
-CONECITONSTRING="-"
