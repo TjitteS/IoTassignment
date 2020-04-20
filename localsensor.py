@@ -34,7 +34,8 @@ while True:
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d, %H.%M.%S.%f")
     payload = "\"temperature\": \"%f\",\"humidity\": \"%f\",\"edgetimestamp\":\"%s\"" % (data.temperature, data.humidity, timestamp)
     print(payload)
-    publish.single("devices/local", payload, hostname="localhost")
+    publish.single("devices/local", payload, hostname="localhost",qos=0)
         
-    time.sleep(2);
+    time.sleep(1);
+
 

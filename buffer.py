@@ -22,90 +22,87 @@ databuffer_db = None
 data_db = None
 iotclient = None
 
-RESPONSE_MSGIDS = [];
-RESPONSE_RESULT = [];
+msglist = []
 
+def saveinbuffer(msg):
+    global databuffer_db
+    try:
+        #print(msg.payload)
+        q="INSERT INTO buffer VALUES (\'%s\',\'%s\',\'new\'); "% (msg.topic, msg.payload.decode("utf-8"))
+        print("[%s] Message arrived in buffer with device ID: %s" % (time.strftime("%H:%M:%S", time.gmtime()),msg.topic))
+        c = databuffer_db.cursor();
+        c.execute(q)
+        #databuffer_db.commit()
+    except lite.Error as e:
+       print("Error while inserting message in buffer: %s" % e)
+       
+       
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
     client.subscribe("devices/#")
 
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
-    global databuffer_db
+    msglist.append(msg)
+
+
+# Retrieve data from database
+def exstract(param, s):
+    #Format: " ... "param":"lookingforthis?" ...
+    #Find parameter keyword index
+    i = s.find(param)
+    #find separator index:
+    i = s.find(':', i)
+
+    #find string start and end index:
+    istart = s.find('\"', i) +1
+    iend = s.find('\"', istart)
+    return s[istart:iend]
+
+async def trysend(row):
     try:
-        print(msg.payload)
-        q="INSERT INTO buffer VALUES (\'%s\',\'%s\',\'new\'); "% (msg.topic, msg.payload.decode("utf-8"))
-        print(q)
-        c = databuffer_db.cursor();
-        c.execute(q)
-        databuffer_db.commit()
-    except lite.Error as e:
-       print("Error while inserting message in buffer: %s" % e)
+        MSG_TXT = "{\"deviceId\": \"%s\",%s}"
+        msg_txt_formatted = MSG_TXT % (row[1],row[2])
+        message =  Message(msg_txt_formatted, message_id="%s" % row[0])
+        await asyncio.wait_for(iotclient.send_message(message), 2.0)
+        return True
+    except asyncio.TimeoutError as e:
+        #An Error accoured!
+        return False
+    
 
 async def sendBufferToHub():
     global databuffer_db,data_db, MESSAGE_COUNT, iotclient
     c = databuffer_db.cursor()
-            
-    #Sends all data from the buffer to the iot hub.
+    datac = data_db.cursor()
     
-     #check if there is data buffered in the database
-    while True:
-        #fetch a row.
-        row = None
+    c.execute("SELECT ROWID, * FROM buffer WHERE state = 'new' ORDER BY ROWID ASC LIMIT 1000")
+    
+    rows = c.fetchall()
 
-        c.execute("SELECT ROWID, * FROM buffer WHERE state = 'new' ORDER BY ROWID ASC LIMIT 1")
-        row = c.fetchone()
-        
-        #data_db = lite.connect('data.db');
-        datac = data_db.cursor();
-        
-        if(row != None):
-            #there is data in the buffer!
-            #try to send the row forward to IoT hub:
-            timestamp = datetime.datetime.now().strftime("%B %d, %Y, %H.%M.%S")
+    tasks = []
+    for row in rows:
+        tasks.append(trysend(row))
+    #send
+    res = await asyncio.gather(*tasks);
+    
+    for n in range(len(rows)):  
+        if res[n] == True:
+            row = rows[n];
+            temp = exstract("temperature", row[2])
+            hum  = exstract("humidity", row[2])
+            timestamp=exstract("edgetimestamp", row[2])
                 
-            #format the message to be sent to the IoT hub: TODO
-            MSG_TXT = "{\"deviceId\": \"%s\",%s}"
-            msg_txt_formatted = MSG_TXT % (row[1],row[2])
-            print (msg_txt_formatted)
-            
-            try:
-                message =  Message(msg_txt_formatted, message_id="%s" % row[0])
-                await asyncio.wait_for(iotclient.send_message(message), 2.0)
+            datac.execute("INSERT INTO [rasp] VALUES (\'%s\', \'%s\', \'%s\', \'%s\');" % (row[1], temp, hum, timestamp));
+            c.execute(    "DELETE FROM buffer WHERE ROWID = %s" % (row[0]))
                 
+            print("[%s] Message sent to IoT Hub from device ID: %s"%(time.strftime("%H:%M:%S", time.gmtime()),row[1]) )
                 
-                #Format: "temperature": "%f","humidity\": "%f","edgetimestamp":"%s"
-                split = row[2].split(',')
-                temp=re.sub('[^0-9.]','',split[0])
-                hum=re.sub('[^0-9.]','',split[1])
-                split = row[2].split('\"edgetimestamp\":');
-                print(split)
-                timestamp=re.sub('"','',split[1])
-                q = "INSERT INTO [rasp] VALUES (\'%s\', \'%s\', \'%s\', \'%s\');" % (row[1], temp, hum, timestamp)
-                print(q)
-                datac.execute(q);
-                
-                #Send correctly! delete the row
-                #update state:
-                q = "DELETE FROM buffer WHERE ROWID = %s" % (row[0])
-                print(q)
-                c.execute(q)
-            except asyncio.TimeoutError as e:
-                #An Error accoured!
-                print("An error acoured while trying to send iot message:")
-                print(e);
-                data_db.commit();
-                #data_db.close();
-                
-                #halt all tries to send current buffer
-                return
-            
         else:
-            #there is no more data in the buffer.
-            data_db.commit();
-            #data_db.close();
-            return
-        
+            print("a message was not send")
+            
+    data_db.commit();
+
     return
    
 def close():
@@ -119,16 +116,23 @@ def close():
     print("Exiting...")
     
 async def mainloop():
-    global databuffer_db
+    global databuffer_db, msglist
     
     
     #infinite loop:
     while True:
+        #mqttclient.loop(0.001);
+  
+        i=0
+        while i < len(msglist):
+            saveinbuffer(msglist[i])
+            i += 1
+        msglist = []
+        
         await sendBufferToHub()
         
-        mqttclient.loop(0.1);
-  
         databuffer_db.commit();
+        
     return
 
 
@@ -176,6 +180,7 @@ if __name__ == "__main__":
     iotclient =  IoTHubDeviceClient.create_from_connection_string(config.CONECITONSTRING)
     iotclient.connect()
     
+    mqttclient.loop_start();
     asyncio.run(mainloop())
     close()
     

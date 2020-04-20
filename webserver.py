@@ -12,19 +12,7 @@ app = Flask(__name__)
 
 import sqlite3
 
-# Retrieve data from database
-def exstract(param, s):
-    #Format: " ... "param":"lookingforthis?" ...
-    #Find parameter keyword index
-    i = s.find(param)
-    #find separator index:
-    i = s.find(':', start = i)
-    
-    #find string start and end index:
-    istart = s.find('\"', start = i)
-    iend = s.find('\"', start = istart)
-    
-    return s[istart:iend]
+
  
     
 def getData(n=1):
@@ -47,14 +35,16 @@ def getData(n=1):
 
 def grapgen():
     while True:
-        fig = Figure()
-        axis = fig.add_subplot(1, 1, 1)
-        time, temp, hum = getData(100)
-        axis.plot(time, temp)
-        #axis.plot(time, hum)
+        fig = Figure(figsize = (10, 5))
+        axis1 = fig.add_subplot(1, 2, 1)
+        axis2 = fig.add_subplot(1, 2, 2)
+        
+        time, temp, hum = getData(5000)
+        axis1.plot(time, temp)
+        axis2.plot(time, hum)
         
         output = io.BytesIO()
-        FigureCanvas(fig).print_png(output)
+        FigureCanvas(fig).print_png(output, dpi=600)
         
         frame = output.getvalue()
         yield (b'--frame\r\n'
